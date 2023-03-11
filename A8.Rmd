@@ -1,0 +1,138 @@
+---
+title: "Week 8"
+author: "Igor Serafini"
+date: "2023-03-08"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+(github_link)[]
+
+#Assignment 8 Metabarcoding & Community Ecology
+
+Questions: 
+
+1. What effect (if any) does garlic mustard have on the plant community?
+
+2.What has a stronger effect on plant communities: the presence/absence of garlic mustard (in/out) or sampling population? 
+
+
+Loading packages
+
+```{r}
+library(ggplot2)
+library(ape)
+library(ggtree)
+library(vegan)
+library(tidyverse)
+library(reshape2)
+```
+
+Loading data
+```{r}
+Floristic <- read.csv("FloristicSurvey.csv")
+```
+
+Cleaning data
+```{r}
+#Retaining useful data, and using Population and Location for pivot longer 
+Floristic1 <- Floristic %>% 
+  select(-Quadrate,-Bud_Flw, -Flower, -Flw_Sil, -Sillique, -Bolting, -Rosettes) %>% 
+  pivot_longer(cols= c(-Location, Population),names_to = "name", values_to = "value") %>% 
+  group_by(Location, name) %>% 
+  mutate(row_id = row_number()) %>% 
+  ungroup() %>% 
+  pivot_wider(names_from = "name", values_from = "value", values_fn = list) %>% 
+  unnest_wider(everything(), names_sep = "_")
+```
+
+
+Further arranging data
+```{r}
+Floristic1_selected1 <- Floristic1 %>% 
+  select(4:38)
+
+Floristic_selected2 <- Floristic1 %>% 
+  select(Location_1, Population_1)
+
+result1 <- cbind(Floristic1_selected1, Floristic_selected2)
+
+result <- result1 %>% 
+pivot_longer(cols = c(-Location_1, -Population_1))
+```
+
+
+
+Species into 30 rows for NMDS 
+```{r}
+Species<- data.frame(names(Floristic1))
+
+Species <- head(Species, 30)
+
+#Note, unlisting Species data
+Species <- data.frame(matrix(unlist(Species)))
+```
+
+
+Setting Florsitic data as matrix
+```{r}
+floristic1 <- result1 %>% 
+  select(-Location_1, -Population_1)
+
+
+floristic <- as.matrix(floristic1)
+```
+
+
+Running NMDS, setting distance to bray 
+```{r}
+nmds <- metaMDS(floristic1, distance= "bray")
+
+plot(nmds)
+```
+
+```{r}
+data.scores0 <- as.data.frame(scores(nmds)$sites)
+```
+
+
+Adding Specie collumn into data.score0 (NMDS site data) back
+```{r}
+data.scores0$Species <- Species$matrix.unlist.Species..
+head(data.scores0)
+```
+
+Running NMDS 
+```{r}
+NMDS_plot <- ggplot(data.scores0, aes(x = NMDS1, y = NMDS2)) + 
+    geom_point(size = 4, aes(colour= Species)) + geom_text(aes(label = Species), size = 3, hjust = 0.2, vjust = -1) 
+NMDS_plot
+```
+Note, the cluster of Budding (garlic mustard is visible at near the coordinate NMDS2= ~-1.3 and NMDS1= ~0. In this context, we can see that garlic mustard has a close composition to Claytonia virginia, however, a very low composition to the other species. Thus, we can run other models that will better help us understand the impact of garlic mustard. 
+
+
+Running a Permonova to establish the 
+```{r}
+species_matrix <- as.matrix(result1[,1:35])
+
+# indicating presence of in or out = Location- Code just ran better not sure why 
+result1$GarlicMustard <- ifelse(result1$Budding > 0, "in", "out")
+
+#PERMANOVA
+permanova1 <- adonis2(species_matrix ~ GarlicMustard + Population_1, data = result1, method = "bray")
+
+# results
+permanova1
+```
+ANS 1. The permanova demonstrates that Garlic mustard has a significant effect on community composition, explianing 14.8% of its variation
+ANS 2. The permonova demonstrates that Sampliing population has a larger effect on plant communities, such that Garlic mustard presence/absence account for 14.8% of variability in the population, while Sampling Population Accounts for 45.2%
+
+
+
+
+
